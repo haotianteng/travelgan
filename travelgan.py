@@ -63,7 +63,8 @@ class TravelGAN(object):
         self.args = args
         self.x1 = x1
         self.x2 = x2
-
+        im_shape1 = x1.shape
+        im_shape2 = x2.shape
         if self.args.restore_folder:
             self._restore(self.args.restore_folder, self.args.gpu_frac)
             return
@@ -71,8 +72,8 @@ class TravelGAN(object):
         self.iteration = 0
 
         if self.x1 is not None and self.x2 is not None:
-            self.datasetx1ph = tf.placeholder(tf.float32, x1.shape, name='datasetx1ph')
-            self.datasetx2ph = tf.placeholder(tf.float32, x2.shape, name='datasetx2ph')
+            self.datasetx1ph = tf.placeholder(tf.float32, im_shape1, name='datasetx1ph')
+            self.datasetx2ph = tf.placeholder(tf.float32, im_shape2, name='datasetx2ph')
             datasetx1 = tf.data.Dataset.from_tensor_slices((self.datasetx1ph)).repeat().batch(args.batch_size)
             datasetx2 = tf.data.Dataset.from_tensor_slices((self.datasetx2ph)).repeat().batch(args.batch_size)
             self.iteratorx1 = datasetx1.make_initializable_iterator()
@@ -82,20 +83,24 @@ class TravelGAN(object):
             self.iteratorx2.make_initializer(datasetx2, name='initializerx2')
 
             x1ph = self.iteratorx1.get_next()
-            x1ph = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), x1ph)
+#            x1ph = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), x1ph)
 
             x2ph = self.iteratorx2.get_next()
-            x2ph = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), x2ph)
+#            x2ph = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), x2ph)
 
-            cropdim = int(.8 * x1ph.get_shape()[1].value)
-            x1ph = tf.map_fn(lambda img: tf.random_crop(img, [cropdim, cropdim, 3]), x1ph)
-            x2ph = tf.map_fn(lambda img: tf.random_crop(img, [cropdim, cropdim, 3]), x2ph)
+#            cropdim = int(.8 * x1ph.get_shape()[1].value)
+#            x1ph = tf.map_fn(lambda img: tf.random_crop(img, [cropdim, cropdim, 3]), x1ph)
+#            x2ph = tf.map_fn(lambda img: tf.random_crop(img, [cropdim, cropdim, 3]), x2ph)
+            
+            crop_ratio = 0.8
+            x1ph = tf.map_fn(lambda img: tf.image.central_crop(img, crop_ratio), x1ph)
+            x2ph = tf.map_fn(lambda img: tf.image.central_crop(img, crop_ratio), x2ph)
         else:
-            x1ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, 3], name='x1ph')
-            x2ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, 3], name='x2ph')
+            x1ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, args.channels], name='x1ph')
+            x2ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, args.channels], name='x2ph')
 
-        self.xb1 = tf.placeholder_with_default(x1ph, shape=[None, args.imdim, args.imdim, 3], name='xb1')
-        self.xb2 = tf.placeholder_with_default(x2ph, shape=[None, args.imdim, args.imdim, 3], name='xb2')
+        self.xb1 = tf.placeholder_with_default(x1ph, shape=[None, args.imdim, args.imdim, args.channels], name='xb1')
+        self.xb2 = tf.placeholder_with_default(x2ph, shape=[None, args.imdim, args.imdim, args.channels], name='xb2')
 
         self.lr = tf.placeholder(tf.float32, shape=[], name='lr')
         self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')

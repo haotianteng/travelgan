@@ -14,17 +14,24 @@ def get_data_args(args):
     batch1, batch2, args.channels, args.imdim = get_data_imagenet(args.datadirb1, args.datadirb2, D=int(1.25 * args.downsampledim))
     return args, batch1, batch2
 
-def get_data_imagenet(datadirb1, datadirb2, D=128):
+def get_data_imagenet(datadirb1, datadirb2, D=128,compress_to_gray = True):
     b1 = sorted(glob.glob('{}/*'.format(datadirb1)))
     b2 = sorted(glob.glob('{}/*'.format(datadirb2)))
-    b1 = [fn for fn in b1 if any(['png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
-    b2 = [fn for fn in b2 if any(['png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
+    b1 = [fn for fn in b1 if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
+    b2 = [fn for fn in b2 if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
+    if compress_to_gray:
+        compress = lambda x: np.sum(x,axis=2,keepdims = True)
+        channels = 1
+    else:
+        compress = lambda x: x
+        channels = 3
 
-    b1 = [scipy.misc.imresize(scipy.ndimage.imread(f), (D, D)) for f in b1]
-    b2 = [scipy.misc.imresize(scipy.ndimage.imread(f), (D, D)) for f in b2]
+    b1 = [compress(scipy.misc.imresize(scipy.ndimage.imread(f), (D, D))) for f in b1]
+    print("compress image size b1")
+    b2 = [compress(scipy.misc.imresize(scipy.ndimage.imread(f), (D, D))) for f in b2]
+    print("compress image size b2")
     b1 = [im for im in b1 if len(im.shape) == 3]
     b2 = [im for im in b2 if len(im.shape) == 3]
-
     b1 = np.stack(b1, axis=0)
     b2 = np.stack(b2, axis=0)
 
@@ -36,7 +43,7 @@ def get_data_imagenet(datadirb1, datadirb2, D=128):
     b1 = (b1 / 127.5) - 1
     b2 = (b2 / 127.5) - 1
 
-    return b1, b2, 3, int(.8 * D)
+    return b1, b2, channels, int(.8 * D)
 
 def randomize_image(img, enlarge_size=286, output_size=256):
     img = imresize(img, [enlarge_size, enlarge_size])
@@ -62,6 +69,19 @@ def randomcrop(imgs, cropsize):
         imgsout[i] = img
     return imgsout
 
+def central_crop(imgs,cropratio):
+    width = imgs.shape[1]
+    cropsize = int(np.floor(width*cropratio))
+    imgsout = np.zeros((imgs.shape[0], cropsize, cropsize, imgs.shape[3]))
+    for i in range(imgs.shape[0]):
+        img = imgs[i]
+        h1 = int(np.ceil(width*cropratio/2.0))
+        w1 = int(np.ceil(width*cropratio/2.0))
+        img = img[h1:h1 + cropsize, w1:w1 + cropsize]
+        imgsout[i] = img
+    return imgsout
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     # required params
@@ -82,7 +102,7 @@ def parse_args():
 
     # training params
     parser.add_argument('--training_steps', type=int, default=200000)
-    parser.add_argument('--training_steps_decayafter', type=int, default=200000)
+    parser.add_argument('--training_steps_decayafter', type=int, default=100000)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--gpu_frac', type=float, default=1)
     parser.add_argument('--restore_folder', type=str, default='')
@@ -109,8 +129,8 @@ if not args.restore_folder:
 if not os.path.exists("{}/output".format(args.savefolder)): os.mkdir("{}/output".format(args.savefolder))
 
 
-load1 = Loader(batch1, labels=np.arange((batch1.shape[0])), shuffle=True)
-load2 = Loader(batch2, labels=np.arange((batch2.shape[0])), shuffle=True)
+load1 = Loader(batch1, labels=np.arange((batch1.shape[0])), shuffle=False)
+load2 = Loader(batch2, labels=np.arange((batch2.shape[0])), shuffle=False)
 
 print("Domain 1 shape: {}".format(batch1.shape))
 print("Domain 2 shape: {}".format(batch2.shape))
@@ -121,7 +141,7 @@ plt.ioff()
 fig = plt.figure(figsize=(4, 10))
 np.set_printoptions(precision=3)
 decay = model.args.learning_rate / (args.training_steps - args.training_steps_decayafter)
-
+crop_ratio = 0.8
 for i in range(1, args.training_steps):
 
     if i % 10 == 0: print("Iter {} ({})".format(i, now()))
@@ -138,8 +158,11 @@ for i in range(1, args.training_steps):
         testb1 = batch1[xb1inds]
         testb2 = batch2[xb2inds]
 
-        testb1 = randomcrop(testb1, args.imdim)
-        testb2 = randomcrop(testb2, args.imdim)
+#        testb1 = randomcrop(testb1, args.imdim)
+#        testb2 = randomcrop(testb2, args.imdim)
+        testb1 = central_crop(testb1, crop_ratio)
+        testb2 = central_crop(testb2, crop_ratio)
+        
 
         Gb1 = model.get_layer(testb1, testb2, name='Gb1')
         Gb2 = model.get_layer(testb1, testb2, name='Gb2')
@@ -184,8 +207,11 @@ for i in range(1, args.training_steps):
         testb1 = batch1[xb1inds]
         testb2 = batch2[xb2inds]
 
-        testb1 = randomcrop(testb1, args.imdim)
-        testb2 = randomcrop(testb2, args.imdim)
+#        testb1 = randomcrop(testb1, args.imdim)
+#        testb2 = randomcrop(testb2, args.imdim)
+
+        testb1 = central_crop(testb1, crop_ratio)
+        testb2 = central_crop(testb2, crop_ratio)
 
         print(model.get_loss_names())
         lstring = model.get_loss(testb1, testb2)
