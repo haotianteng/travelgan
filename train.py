@@ -9,6 +9,7 @@ import scipy.ndimage
 from utils import now
 from travelgan import TravelGAN
 from loader import Loader
+from PIL import Image
 
 def get_data_args(args):
     batch1, batch2, args.channels, args.imdim = get_data_imagenet(args.datadirb1, args.datadirb2, D=int(1.25 * args.downsampledim))
@@ -20,15 +21,15 @@ def get_data_imagenet(datadirb1, datadirb2, D=128,compress_to_gray = True):
     b1 = [fn for fn in b1 if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
     b2 = [fn for fn in b2 if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
     if compress_to_gray:
-        compress = lambda x: np.sum(x,axis=2,keepdims = True)
+        compress = lambda x: np.sum(np.reshape(x,(x.shape[0],x.shape[1],1)),axis=2,keepdims = True) if len(x.shape)==2 else np.sum(x,axis=2,keepdims = True)
         channels = 1
     else:
         compress = lambda x: x
         channels = 3
 
-    b1 = [compress(scipy.misc.imresize(scipy.ndimage.imread(f), (D, D))) for f in b1]
+    b1 = [compress(np.asarray(Image.open(f).resize((D,D)))) for f in b1]
     print("compress image size b1")
-    b2 = [compress(scipy.misc.imresize(scipy.ndimage.imread(f), (D, D))) for f in b2]
+    b2 = [compress(np.array(Image.open(f).resize((D,D)))) for f in b2]
     print("compress image size b2")
     b1 = [im for im in b1 if len(im.shape) == 3]
     b2 = [im for im in b2 if len(im.shape) == 3]
