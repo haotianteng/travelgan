@@ -101,7 +101,6 @@ class TravelGAN(object):
 
         self.xb1 = tf.placeholder_with_default(x1ph, shape=[None, args.imdim, args.imdim, args.channels], name='xb1')
         self.xb2 = tf.placeholder_with_default(x2ph, shape=[None, args.imdim, args.imdim, args.channels], name='xb2')
-
         self.lr = tf.placeholder(tf.float32, shape=[], name='lr')
         self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
 
@@ -366,6 +365,7 @@ class Generator(object):
             # up
             encoders = []
             nshape = x.get_shape()[1].value
+            out_channels = x.get_shape()[3].value
             filt = self.args.nfilt
             layer = 1
             iinput = x
@@ -399,7 +399,7 @@ class Generator(object):
                 if self.first_call: print(iinput)
 
             # out
-            out = unet_conv_t(output, None, 3, 'out', is_training, activation=tf.nn.tanh, batch_norm=False, skip_connections=False)
+            out = unet_conv_t(output, None, out_channels, 'out', is_training, activation=tf.nn.tanh, batch_norm=False, skip_connections=False)
 
             if self.first_call:
                 print("{}\n".format(out))
