@@ -12,47 +12,88 @@ from loader import Loader
 from PIL import Image
 
 def get_data_args(args):
-    batch1, batch2, args.channels, args.imdim = get_data_imagenet(args.datadirb1, args.datadirb2, D=int(1.25 * args.downsampledim))
-    return args, batch1, batch2
+    train, label, args.channels, args.imdim = many2one_dataset(args.datadirs, D=int(1.25 * args.downsampledim))
+    return args, train, label
 
-def get_data_imagenet(datadirb1, datadirb2, D=128,compress_to_gray = True):
-    b1 = sorted(glob.glob('{}/*'.format(datadirb1)))
-    b2 = sorted(glob.glob('{}/*'.format(datadirb2)))
-    b1 = [fn for fn in b1 if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
-    b2 = [fn for fn in b2 if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
+def many2one_dataset(datadirs,delimeter= '_', D=128):
+    """
+    ##TODO replace this temporary function with a data loader.
+    datadirs: directories of the data, the last directory used as label, others
+    used as training dataset.
+    """
+    dataset_n = len(datadirs)
+    if dataset_n<2:
+        raise ValueError("At least 2 image directories need to be provided.")
+    batches = []
+    markers = []
+    name_order = []
+    dimensions = []
+    offset = []
+    for datadir in datadirs:
+        b,f_n,D= preprocess_img(datadir,D=D,compress_to_gray = True)
+        dimensions.append(D)
+        marker = np.asarray([delimeter.join(os.path.basename(x).split(delimeter)[:-1]) for x in f_n])
+        name_order.append(np.argsort(marker))
+        batches.append(b[name_order])
+        markers.append(marker[name_order])
+        offset.append(0)
+    inter_fns = set(markers[0])
+    n = 0
+    for fn in markers[1:]:
+        inter_fns = inter_fns.intersection(set(fn))
+        n = max(n,len(batches))
+        
+    match = True
+    for marker in markers:
+        if inter_fns != marker:
+            match = False
+    if not match:
+        print("Warning, some image is not paired and will be ignored.")
+        train = []
+        label = []
+        for img_idx,img in batches[0]:
+            curr_img = [img]
+            fit = True
+            if markers[0][img_idx] not in inter_fns:
+                continue
+            for b_idx,b in enumerate(batches[1:]):
+                while markers[b_idx][offset[b_idx]] < markers[0][img_idx]:
+                    offset[b_idx]+=1
+                if markers[b_idx][offset[b_idx]] != markers[0][img_idx]:
+                    fit = False
+                    break
+                curr_img.append[np.reshape(b[offset[b_idx]],shape = (D,D))]
+            if fit:
+                train.append(np.stack(curr_img[:-1],axis = 2))
+                label.append(np.reshape(curr_img[-1],shape = (D,D,1)))
+        train = np.stack(train,axis = 0)
+        label = np.stack(label,axis = 0)
+    else:
+        label = batches[:-1]
+        train = batches[1:]
+        train = [np.stack(x,axis =0 ) for x in train]
+        train = [np.reshape(x,(x.shape[0],x.shape[1],x.shape[2])) for x in train]
+        train = np.stack(train,axis=3)
+    channels = train.shape[3]
+    return train, label, channels, int(.8 * D)
+
+def preprocess_img(datadir,D = 512,compress_to_gray = True):
+    fns = sorted(glob.glob('{}/*'.format(datadir)))
+    fns = [fn for fn in fns if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
     if compress_to_gray:
         compress = lambda x: np.sum(np.reshape(x,(x.shape[0],x.shape[1],1)),axis=2,keepdims = True) if len(x.shape)==2 else np.sum(x,axis=2,keepdims = True)
-        channels = 1
     else:
         compress = lambda x: x
-        channels = 3
 
-    b1 = [compress(np.asarray(Image.open(f).resize((D,D)))) for f in b1]
-    print("compress image size b1")
-    b2 = [compress(np.array(Image.open(f).resize((D,D)))) for f in b2]
-    print("compress image size b2")
-    b1 = [im for im in b1 if len(im.shape) == 3]
-    b2 = [im for im in b2 if len(im.shape) == 3]
-    b1 = np.stack(b1, axis=0)
-    b2 = np.stack(b2, axis=0)
-
-    b1 = b1.astype(np.float32)
-    b2 = b2.astype(np.float32)
-    print(b1.shape)
-    print(b2.shape)
-
-    b1 = (b1 / 127.5) - 1
-    b2 = (b2 / 127.5) - 1
-
-    return b1, b2, channels, int(.8 * D)
+    imgs = [[compress(np.asarray(Image.open(f).resize((D,D))))] for f in fns]
+    print("compress image size")
+    return np.asarray(imgs), np.asarray(fns), int(.8 * D)
 
 def randomize_image(img, enlarge_size=286, output_size=256):
     img = imresize(img, [enlarge_size, enlarge_size])
-
     h1 = int(np.ceil(np.random.uniform(1e-2, enlarge_size - output_size)))
     w1 = int(np.ceil(np.random.uniform(1e-2, enlarge_size - output_size)))
     img = img[h1:h1 + output_size, w1:w1 + output_size]
-
     if np.random.random() > .5:
         img = np.fliplr(img)
 
@@ -90,8 +131,9 @@ def parse_args():
 
     # data params
     parser.add_argument('--downsampledim', type=int, default=128)
-    parser.add_argument('--datadirb1', type=str, default='')
-    parser.add_argument('--datadirb2', type=str, default='')
+    parser.add_argument('--datadirs', type=str, default='',
+                        help = "Data directories divided by comma.")
+    parser.add_argument('--paired_data', type=int, default=False)
 
     # model params
     parser.add_argument('--nfilt', type=int, default=64)
@@ -113,13 +155,22 @@ def parse_args():
 
     args.modelname = 'TraVeLGAN'
     args.model = TravelGAN
-    args, batch1, batch2 = get_data_args(args)
+    args.datadirs = args.datadirs.split(',')
 
-    if not os.path.exists(args.savefolder): os.mkdir(args.savefolder)
+    return args
 
-    return args, batch1, batch2
+args = parse_args()
 
-args, batch1, batch2 = parse_args()
+### Local test
+args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
+args.datadirs = "/media/heavens/LaCie/Murphy_data/images/blue,\
+                /media/heavens/LaCie/Murphy_data/images/green,\
+                /media/heavens/LaCie/Murphy_data/images/yellow,\
+                /media/heavens/LaCie/Murphy_data/images/red".split(',')
+args.downsampledim = 256
+args.paired_data = True
+if not os.path.exists(args.savefolder): 
+    os.mkdir(args.savefolder)
 if not args.restore_folder:
     with open(os.path.join(args.savefolder, 'args.txt'), 'w+') as f:
         for arg in vars(args):
@@ -128,14 +179,14 @@ if not args.restore_folder:
             print(argstring[:-1])
 
 if not os.path.exists("{}/output".format(args.savefolder)): os.mkdir("{}/output".format(args.savefolder))
+###
+args,train,label = get_data_args(args)
+load1 = Loader(train, labels=np.arange((train.shape[0])), shuffle=False)
+load2 = Loader(label, labels=np.arange((label.shape[0])), shuffle=False)
 
-
-load1 = Loader(batch1, labels=np.arange((batch1.shape[0])), shuffle=False)
-load2 = Loader(batch2, labels=np.arange((batch2.shape[0])), shuffle=False)
-
-print("Domain 1 shape: {}".format(batch1.shape))
-print("Domain 2 shape: {}".format(batch2.shape))
-model = args.model(args, x1=batch1, x2=batch2, name=args.modelname)
+print("Domain 1 shape: {}".format(train.shape))
+print("Domain 2 shape: {}".format(label.shape))
+model = args.model(args, x1=train, x2=label, name=args.modelname)
 
 
 plt.ioff()
@@ -154,10 +205,13 @@ for i in range(1, args.training_steps):
     if i and (i == 50 or i % 500 == 0):
         model.save(folder=args.savefolder)
 
-        xb1inds = np.random.choice(batch1.shape[0], replace=False, size=[10])
-        xb2inds = np.random.choice(batch2.shape[0], replace=False, size=[10])
-        testb1 = batch1[xb1inds]
-        testb2 = batch2[xb2inds]
+        xb1inds = np.random.choice(train.shape[0], replace=False, size=[10])
+        if args.paired_data:
+            xb2inds = xb1inds
+        else:
+            xb2inds = np.random.choice(label.shape[0], replace=False, size=[10])
+        testb1 = train[xb1inds]
+        testb2 = label[xb2inds]
 
 #        testb1 = randomcrop(testb1, args.imdim)
 #        testb2 = randomcrop(testb2, args.imdim)
@@ -203,10 +257,10 @@ for i in range(1, args.training_steps):
         fig.savefig('{}/output/b2_to_b1.png'.format(args.savefolder), dpi=500)
 
 
-        xb1inds = np.random.choice(batch1.shape[0], replace=False, size=[args.batch_size])
-        xb2inds = np.random.choice(batch2.shape[0], replace=False, size=[args.batch_size])
-        testb1 = batch1[xb1inds]
-        testb2 = batch2[xb2inds]
+        xb1inds = np.random.choice(train.shape[0], replace=False, size=[args.batch_size])
+        xb2inds = np.random.choice(label.shape[0], replace=False, size=[args.batch_size])
+        testb1 = train[xb1inds]
+        testb2 = label[xb2inds]
 
 #        testb1 = randomcrop(testb1, args.imdim)
 #        testb2 = randomcrop(testb2, args.imdim)
