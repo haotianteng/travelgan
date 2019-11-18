@@ -10,6 +10,7 @@ from utils import now
 from travelgan import TravelGAN
 from loader import Loader
 from PIL import Image
+import sys
 
 def get_data_args(args):
     train, label, args.channels, args.imdim = many2one_dataset(args.datadirs, D=int(1.25 * args.downsampledim))
@@ -29,13 +30,13 @@ def many2one_dataset(datadirs,delimeter= '_', D=128):
     name_order = []
     dimensions = []
     offset = []
-    for datadir in datadirs:
+    for data_idx,datadir in enumerate(datadirs):
         b,f_n,D= preprocess_img(datadir,D=D,compress_to_gray = True)
         dimensions.append(D)
         marker = np.asarray([delimeter.join(os.path.basename(x).split(delimeter)[:-1]) for x in f_n])
         name_order.append(np.argsort(marker))
-        batches.append(b[name_order])
-        markers.append(marker[name_order])
+        batches.append(b[name_order[data_idx]])
+        markers.append(marker[name_order[data_idx]])
         offset.append(0)
     inter_fns = set(markers[0])
     n = 0
@@ -151,7 +152,7 @@ def parse_args():
     parser.add_argument('--restore_folder', type=str, default='')
     parser.add_argument('--learning_rate', type=float, default=.0002)
 
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[1:])
 
     args.modelname = 'TraVeLGAN'
     args.model = TravelGAN
@@ -159,14 +160,17 @@ def parse_args():
 
     return args
 
+
+
 args = parse_args()
 
 ### Local test
 args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
-args.datadirs = "/media/heavens/LaCie/Murphy_data/images/blue,\
-                /media/heavens/LaCie/Murphy_data/images/green,\
-                /media/heavens/LaCie/Murphy_data/images/yellow,\
-                /media/heavens/LaCie/Murphy_data/images/red".split(',')
+args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/red",
+                "/media/heavens/LaCie/Murphy_data/images/blue",
+                "/media/heavens/LaCie/Murphy_data/images/green",
+                "/media/heavens/LaCie/Murphy_data/images/yellow",
+                "/media/heavens/LaCie/Murphy_data/images/red"]
 args.downsampledim = 256
 args.paired_data = True
 if not os.path.exists(args.savefolder): 
