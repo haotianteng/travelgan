@@ -166,17 +166,17 @@ def parse_args():
 args = parse_args()
 
 ### Local test
-args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
-args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/blue",
-                 "/media/heavens/LaCie/Murphy_data/images/test/green",
-                 "/media/heavens/LaCie/Murphy_data/images/test/red"
-                 ]
+#args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
+#args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/blue",
+#                 "/media/heavens/LaCie/Murphy_data/images/test/green",
+#                 "/media/heavens/LaCie/Murphy_data/images/test/red"
+#                 ]
 
 #args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/blue",
 #                "/media/heavens/LaCie/Murphy_data/images/green",
 #                "/media/heavens/LaCie/Murphy_data/images/yellow",
 #                "/media/heavens/LaCie/Murphy_data/images/red"]
-args.downsampledim = 128
+#args.downsampledim = 128
 args.paired_data = True
 if not os.path.exists(args.savefolder): 
     os.mkdir(args.savefolder)
