@@ -117,8 +117,8 @@ def central_crop(imgs,cropratio):
     imgsout = np.zeros((imgs.shape[0], cropsize, cropsize, imgs.shape[3]))
     for i in range(imgs.shape[0]):
         img = imgs[i]
-        h1 = int(np.ceil(width*cropratio/2.0))
-        w1 = int(np.ceil(width*cropratio/2.0))
+        h1 = int(np.ceil(width*(1-cropratio)/2.0))
+        w1 = int(np.ceil(width*(1-cropratio)/2.0))
         img = img[h1:h1 + cropsize, w1:w1 + cropsize]
         imgsout[i] = img
     return imgsout
@@ -217,6 +217,7 @@ for i in range(1, args.training_steps):
 #        testb2 = randomcrop(testb2, args.imdim)
         testb1 = central_crop(testb1, crop_ratio)
         testb2 = central_crop(testb2, crop_ratio)
+        print("Shape of the testb1",testb1.shape)
         
 
         Gb1 = model.get_layer(testb1, testb2, name='Gb1')
@@ -237,8 +238,8 @@ for i in range(1, args.training_steps):
                 ax.set_xticks([])
                 ax.set_yticks([])
 
-            ax1.imshow(testb1[ii])
-            ax2.imshow(Gb2[ii])
+            ax1.imshow(testb1[ii][:,:,0])
+            ax2.imshow(Gb2[ii][:,:,0])
         fig.canvas.draw()
         fig.savefig('{}/output/b1_to_b2.png'.format(args.savefolder), dpi=500)
 
@@ -251,8 +252,8 @@ for i in range(1, args.training_steps):
                 ax.set_xticks([])
                 ax.set_yticks([])
 
-            ax1.imshow(testb2[ii])
-            ax2.imshow(Gb1[ii])
+            ax1.imshow(testb2[ii][:,:,0])
+            ax2.imshow(Gb1[ii][:,:,0])
         fig.canvas.draw()
         fig.savefig('{}/output/b2_to_b1.png'.format(args.savefolder), dpi=500)
 
