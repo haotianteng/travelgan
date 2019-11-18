@@ -31,8 +31,8 @@ def many2one_dataset(datadirs,delimeter= '_', D=128):
     dimensions = []
     offset = []
     for data_idx,datadir in enumerate(datadirs):
-        b,f_n,D= preprocess_img(datadir,D=D,compress_to_gray = True)
-        dimensions.append(D)
+        b,f_n,reduced_D= preprocess_img(datadir,width=D,compress_to_gray = True)
+        dimensions.append(reduced_D)
         marker = np.asarray([delimeter.join(os.path.basename(x).split(delimeter)[:-1]) for x in f_n])
         name_order.append(np.argsort(marker))
         batches.append(b[name_order[data_idx]])
@@ -46,27 +46,28 @@ def many2one_dataset(datadirs,delimeter= '_', D=128):
         
     match = True
     for marker in markers:
-        if inter_fns != marker:
+        if inter_fns != set(marker):
             match = False
+            break
     if not match:
         print("Warning, some image is not paired and will be ignored.")
         train = []
         label = []
-        for img_idx,img in batches[0]:
-            curr_img = [img]
+        for img_idx,img in enumerate(batches[0]):
+            curr_img = [np.reshape(img,newshape = (D,D))]
             fit = True
             if markers[0][img_idx] not in inter_fns:
                 continue
-            for b_idx,b in enumerate(batches[1:]):
+            for b_idx,batch in enumerate(batches[1:]):
                 while markers[b_idx][offset[b_idx]] < markers[0][img_idx]:
                     offset[b_idx]+=1
                 if markers[b_idx][offset[b_idx]] != markers[0][img_idx]:
                     fit = False
                     break
-                curr_img.append[np.reshape(b[offset[b_idx]],shape = (D,D))]
+                curr_img.append(np.reshape(batch[offset[b_idx]],newshape = (D,D)))
             if fit:
                 train.append(np.stack(curr_img[:-1],axis = 2))
-                label.append(np.reshape(curr_img[-1],shape = (D,D,1)))
+                label.append(np.reshape(curr_img[-1],newshape = (D,D,1)))
         train = np.stack(train,axis = 0)
         label = np.stack(label,axis = 0)
     else:
@@ -78,7 +79,7 @@ def many2one_dataset(datadirs,delimeter= '_', D=128):
     channels = train.shape[3]
     return train, label, channels, int(.8 * D)
 
-def preprocess_img(datadir,D = 512,compress_to_gray = True):
+def preprocess_img(datadir,width = 512,compress_to_gray = True):
     fns = sorted(glob.glob('{}/*'.format(datadir)))
     fns = [fn for fn in fns if any(['tif' in fn.lower(),'tiff' in fn.lower(), 'png' in fn.lower(), 'jpeg' in fn.lower(), 'jpg' in fn.lower()])]
     if compress_to_gray:
@@ -86,9 +87,9 @@ def preprocess_img(datadir,D = 512,compress_to_gray = True):
     else:
         compress = lambda x: x
 
-    imgs = [[compress(np.asarray(Image.open(f).resize((D,D))))] for f in fns]
+    imgs = [compress(np.asarray(Image.open(f).resize((width,width)))) for f in fns]
     print("compress image size")
-    return np.asarray(imgs), np.asarray(fns), int(.8 * D)
+    return np.asarray(imgs), np.asarray(fns), int(.8 * width)
 
 def randomize_image(img, enlarge_size=286, output_size=256):
     img = imresize(img, [enlarge_size, enlarge_size])
@@ -166,12 +167,16 @@ args = parse_args()
 
 ### Local test
 args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
-args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/red",
-                "/media/heavens/LaCie/Murphy_data/images/blue",
-                "/media/heavens/LaCie/Murphy_data/images/green",
-                "/media/heavens/LaCie/Murphy_data/images/yellow",
-                "/media/heavens/LaCie/Murphy_data/images/red"]
-args.downsampledim = 256
+args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/blue",
+                 "/media/heavens/LaCie/Murphy_data/images/test/green",
+                 "/media/heavens/LaCie/Murphy_data/images/test/red"
+                 ]
+
+#args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/blue",
+#                "/media/heavens/LaCie/Murphy_data/images/green",
+#                "/media/heavens/LaCie/Murphy_data/images/yellow",
+#                "/media/heavens/LaCie/Murphy_data/images/red"]
+args.downsampledim = 128
 args.paired_data = True
 if not os.path.exists(args.savefolder): 
     os.mkdir(args.savefolder)

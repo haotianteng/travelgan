@@ -58,13 +58,16 @@ class TravelGAN(object):
         args,
         x1,
         x2,
-        name='TwoGANs'):
+        name='TwoGANs',
+        cycle = True):
         self.name = name
         self.args = args
         self.x1 = x1
         self.x2 = x2
         im_shape1 = x1.shape
         im_shape2 = x2.shape
+        channels1 = im_shape1[-1]
+        channels2 = im_shape2[-1]
         if self.args.restore_folder:
             self._restore(self.args.restore_folder, self.args.gpu_frac)
             return
@@ -96,11 +99,11 @@ class TravelGAN(object):
             x1ph = tf.map_fn(lambda img: tf.image.central_crop(img, crop_ratio), x1ph)
             x2ph = tf.map_fn(lambda img: tf.image.central_crop(img, crop_ratio), x2ph)
         else:
-            x1ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, args.channels], name='x1ph')
-            x2ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, args.channels], name='x2ph')
+            x1ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, channels1], name='x1ph')
+            x2ph = tf.placeholder(tf.float32, [None, args.imdim, args.imdim, channels2], name='x2ph')
 
-        self.xb1 = tf.placeholder_with_default(x1ph, shape=[None, args.imdim, args.imdim, args.channels], name='xb1')
-        self.xb2 = tf.placeholder_with_default(x2ph, shape=[None, args.imdim, args.imdim, args.channels], name='xb2')
+        self.xb1 = tf.placeholder_with_default(x1ph, shape=[None, args.imdim, args.imdim, channels1], name='xb1')
+        self.xb2 = tf.placeholder_with_default(x2ph, shape=[None, args.imdim, args.imdim, channels2], name='xb2')
         self.lr = tf.placeholder(tf.float32, shape=[], name='lr')
         self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
 
@@ -177,11 +180,11 @@ class TravelGAN(object):
 
     def _build(self):
         self.G12 = Generator(args=self.args, name='G12')
-        self.Gb2 = self.G12(self.xb1, is_training=self.is_training)
+        self.Gb2 = self.G12(self.xb1,self.xb2,is_training=self.is_training)
         self.Gb2 = nameop(self.Gb2, 'Gb2')
 
         self.G21 = Generator(args=self.args, name='G21')
-        self.Gb1 = self.G21(self.xb2, is_training=self.is_training)
+        self.Gb1 = self.G21(self.xb2,self.xb1, is_training=self.is_training)
         self.Gb1 = nameop(self.Gb1, 'Gb1')
 
         self.D1 = Discriminator(args=self.args, name='D1')
@@ -358,14 +361,14 @@ class Generator(object):
         self.name = name
         self.first_call = True
 
-    def __call__(self, x, is_training):
+    def __call__(self, x,y, is_training):
         with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
             if self.first_call: print(tf.get_variable_scope().name)
 
             # up
             encoders = []
             nshape = x.get_shape()[1].value
-            out_channels = x.get_shape()[3].value
+            out_channels = y.get_shape()[3].value
             filt = self.args.nfilt
             layer = 1
             iinput = x
