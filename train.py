@@ -71,13 +71,13 @@ def many2one_dataset(datadirs,delimeter= '_', D=128):
         train = np.stack(train,axis = 0)
         label = np.stack(label,axis = 0)
     else:
-        label = batches[:-1]
+        label = batches[-1]
         train = batches[1:]
         train = [np.stack(x,axis =0 ) for x in train]
         train = [np.reshape(x,(x.shape[0],x.shape[1],x.shape[2])) for x in train]
         train = np.stack(train,axis=3)
     channels = train.shape[3]
-    return train, label, channels, int(.8 * D)
+    return train, np.asarray(label), channels, int(.8 * D)
 
 def preprocess_img(datadir,width = 512,compress_to_gray = True):
     fns = sorted(glob.glob('{}/*'.format(datadir)))
@@ -166,11 +166,11 @@ def parse_args():
 args = parse_args()
 
 ### Local test
-#args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
-#args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/blue",
-#                 "/media/heavens/LaCie/Murphy_data/images/test/green",
-#                 "/media/heavens/LaCie/Murphy_data/images/test/red"
-#                 ]
+args.savefolder = "/media/heavens/LaCie/Murphy_data/out"
+args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/test/blue",
+                 "/media/heavens/LaCie/Murphy_data/images/test/green",
+                 "/media/heavens/LaCie/Murphy_data/images/test/red"
+                 ]
 
 #args.datadirs = ["/media/heavens/LaCie/Murphy_data/images/blue",
 #                "/media/heavens/LaCie/Murphy_data/images/green",
